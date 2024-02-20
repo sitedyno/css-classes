@@ -1,45 +1,42 @@
-const fs = require("node:fs");
+#!/usr/bin/env node
+
+const fs = require("fs");
+const { Command } = require("commander");
+const { globSync } = require("glob");
 const listClasses = require("list-css-classes");
-var path = "";
-var files = [];
+const { basename } = require("path/win32");
+
 var filesChecked = [];
-var cssClasses = [];
-var contents = "";
+var cssClasses;
+var search;
 
-process.argv.forEach(function(val, index) {
-    if (index > 1) {
-        try {
-            // files.push(fs.readdirSync(val, { withFileTypes: true }));
-            files.push(fs.readdirSync(val));
-        } catch (error) {
-            console.log(error.message);
-            exit;
-        }
-    }
-});
-
-if (files.length === 0) {
-    path = "./css/";
-    files = fs.readdirSync(path);
+function commaList(value) {
+    return value.split(",");
 }
+const program = new Command();
+program.name("index.js");
+program.description("Get a list of css classes\nThis should be run to ignore stderr ie: ./index.js 2>/dev/null");
+program.option("--file-extensions <list>", "List of file extensions to look in separated by a comma", commaList, ["css"]);
+program.option("--paths <list>", "List of paths to look for files in separated by a comma", commaList, ["./css/"]);
+program.option("--files-checked", "Get a list of files checked for css classes", true);
+program.parse();
+const opts = program.opts();
 
-files.forEach(function(file) {
-    var fullPath = path + file;
-    var content = fs.readFileSync(fullPath).toString();
-    contents += content;
-    filesChecked.push(file);
+opts.paths.forEach(function(value) {
+    search = value + "*." + opts.fileExtensions.join(",");
+    if (opts.fileExtensions.length > 1) {
+        search = value + "*.{" + opts.fileExtensions.join(",") + "}";
+    }
+    globSync(search).forEach(function(value) {
+        filesChecked.push(basename(value));
+        cssClasses = listClasses({ css: fs.readFileSync(value).toString() }).sync().classNames; 
+    });
 });
 
-results = listClasses({ css: contents })
-    .then((result) => {
-        if (result.classNames.length > 0) {
-            cssClasses = result.classNames;
-        }
-    })
-    .finally(function() {
-        result = {
-            filesChecked: filesChecked,
-            cssClasses: cssClasses,
-        };
-        process.stdout.write(JSON.stringify(result) + "\n");
-    });
+result = {};
+if (opts.filesChecked) {
+    result.filesChecked = filesChecked;
+}
+result.cssClasses = cssClasses;
+process.stdout.write(JSON.stringify(result) + "\n");
+process.exit(0);
